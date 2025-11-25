@@ -1,22 +1,25 @@
-// src/App.jsx (โค้ดใหม่)
+// src/App.jsx
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
-import Dashboard from './pages/Dashboard'; // <--- เพิ่ม import Dashboard
+import Dashboard from './pages/Dashboard';
 
 function App() {
   return (
     <div className="app">
       <Routes>
-        <Route path="/" element={<Navigate to="/login" />} />
+        {/* 🔹 หน้าแรก: แสดง Dashboard เลย แม้ยังไม่ล็อกอิน */}
+        <Route path="/" element={<Dashboard />} />
+
+        {/* 🔹 ยังเข้าผ่าน /dashboard ได้เหมือนเดิม */}
+        <Route path="/dashboard" element={<Dashboard />} />
+
+        {/* Auth pages */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        
-        {/* Dashboard Route */}
-        <Route path="/dashboard" element={<Dashboard />} /> {/* <--- เพิ่ม Route ใหม่ */}
       </Routes>
     </div>
   );

@@ -14,9 +14,28 @@ function Login() {
     e.preventDefault();
     setLoading(true);
     try {
+      // เรียก API login
       const data = await loginUser({ email, password });
-      console.log(`Login Successful: Hello ${data.profile.firstName}`);
-      navigate('/dashboard');
+
+      // ดึงข้อมูลโปรไฟล์จาก response
+      const profile = data.profile || data.user || {};
+
+      // เตรียมข้อมูลที่จะเก็บใน storage
+      const userData = {
+        firstName: profile.firstName || '',
+        lastName: profile.lastName || '',
+        email: profile.email || email,
+        role: profile.role || 'User',
+      };
+
+      // ✅ เก็บข้อมูลผู้ใช้ไว้ให้ Navbar / Sidebar ใช้
+      // จะเก็บใน localStorage เสมอ (ถ้าอยากแยกแบบ remember ค่อยเพิ่มทีหลังได้)
+      localStorage.setItem('user', JSON.stringify(userData));
+
+      console.log(`Login Successful: Hello ${userData.firstName}`);
+
+      // ✅ หลัง login เสร็จ กลับไปหน้า Dashboard (หน้าแรก)
+      navigate('/');
     } catch (err) {
       console.error(err);
       const msg = err.response?.data?.message || 'Login Error';
@@ -59,7 +78,6 @@ function Login() {
             />
           </label>
 
-          {/* ปุ่ม Login */}
           <button
             className="w-full py-2.5 rounded-full bg-emerald-500 text-white text-sm font-semibold shadow-lg hover:bg-emerald-600 hover:-translate-y-px transition disabled:opacity-70 disabled:cursor-default"
             type="submit"
@@ -69,7 +87,6 @@ function Login() {
           </button>
         </form>
 
-        {/* ลิงก์ Forgot Password? อยู่ล่างปุ่ม Login ตามที่ต้องการ */}
         <div className="mt-2 mb-4 text-center">
           <Link
             to="/forgot-password"
@@ -79,10 +96,12 @@ function Login() {
           </Link>
         </div>
 
-        {/* ลิงก์สมัครสมาชิก */}
         <div className="flex justify-center gap-1.5 text-xs text-gray-600">
           <span>Don&apos;t have an account?</span>
-          <Link to="/register" className="text-emerald-500 font-semibold hover:underline">
+          <Link
+            to="/register"
+            className="text-emerald-500 font-semibold hover:underline"
+          >
             Sign up
           </Link>
         </div>

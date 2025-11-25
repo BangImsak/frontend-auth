@@ -1,5 +1,5 @@
 // src/components/Sidebar.jsx
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { X } from "lucide-react";
 
@@ -12,14 +12,39 @@ function Sidebar({
   currentStatus,
   isOpen = false,     // ✅ คุมการเปิด/ปิดบนมือถือ
   onClose = () => {}, // ✅ ปิดเมื่อกด overlay หรือปุ่ม X
-  userName = "บังยาฮารี",
-  userRole = "User",
-  userEmail = "",     // เผื่ออยากโชว์อีเมล
 }) {
   const location = useLocation();
   const activeColorClass = currentStatus
     ? currentStatus.bgClass
     : "bg-[#06b17a]";
+
+  // ✅ เก็บข้อมูล user ที่ล็อกอิน
+  const [profile, setProfile] = useState({
+    name: "Guest User",
+    role: "Guest",
+    email: "",
+  });
+
+  useEffect(() => {
+    const data =
+      localStorage.getItem("user") || sessionStorage.getItem("user");
+
+    if (data) {
+      try {
+        const user = JSON.parse(data);
+        const fullName = `${user.firstName || ""} ${user.lastName || ""}`
+          .trim() || user.email || "User";
+
+        setProfile({
+          name: fullName,
+          role: user.role || "User",
+          email: user.email || "",
+        });
+      } catch (e) {
+        console.error("Cannot parse user from storage:", e);
+      }
+    }
+  }, []);
 
   return (
     <>
@@ -38,14 +63,14 @@ function Sidebar({
           ${isOpen ? "translate-x-0" : "-translate-x-full"}
           md:translate-x-0`}
       >
-        {/* === Header / Profile (แบบไม่โชว์รูปตามที่บังบอก) === */}
+        {/* === Header / Profile (โชว์ชื่อ-นามสกุล) === */}
         <div className="flex items-center justify-between p-5 border-b border-white/10">
           <div className="leading-tight">
-            <p className="text-sm font-semibold">{userName}</p>
-            <p className="text-xs text-gray-300">{userRole}</p>
-            {userEmail && (
+            <p className="text-sm font-semibold">{profile.name}</p>
+            <p className="text-xs text-gray-300">{profile.role}</p>
+            {profile.email && (
               <p className="text-[11px] text-white/70 mt-1 truncate max-w-[180px]">
-                {userEmail}
+                {profile.email}
               </p>
             )}
           </div>
@@ -70,9 +95,10 @@ function Sidebar({
                 to={item.path}
                 onClick={onClose} // ✅ คลิกเมนูแล้วปิดบนมือถือทันที
                 className={`flex items-center gap-3 p-3 my-1 rounded-lg text-sm font-medium transition-all
-                  ${isActive
-                    ? `${activeColorClass} text-white shadow-lg`
-                    : "text-white/80 hover:bg-white/10"
+                  ${
+                    isActive
+                      ? `${activeColorClass} text-white shadow-lg`
+                      : "text-white/80 hover:bg-white/10"
                   }`}
               >
                 <span className="text-lg">{item.icon}</span>
