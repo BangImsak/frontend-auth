@@ -1,26 +1,22 @@
 // src/pages/Login.jsx
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom'; // <--- 1. เพิ่ม useNavigate
+import { Link, useNavigate } from 'react-router-dom';
 import { loginUser } from '../api';
 
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
-  
-  const navigate = useNavigate(); // <--- 2. ประกาศตัวแปรสำหรับ navigate
+
+  const navigate = useNavigate();
 
   async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
     try {
       const data = await loginUser({ email, password });
-      
-      // ลบ alert และเพิ่มคำสั่งเปลี่ยนหน้า
       console.log(`Login Successful: Hello ${data.profile.firstName}`);
-      navigate('/dashboard'); // <--- 3. สั่งให้เปลี่ยนไปหน้า Dashboard
-      
+      navigate('/dashboard');
     } catch (err) {
       console.error(err);
       const msg = err.response?.data?.message || 'Login Error';
@@ -30,12 +26,13 @@ function Login() {
     }
   }
 
-  // ใช้ Tailwind CSS classes เดิม
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4 font-sans text-gray-900">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-[420px]">
         <h1 className="text-2xl font-bold mb-1">Log In</h1>
-        <p className="text-sm text-gray-500 mb-6">Sign up to use the PM0.1 Dashboard system.</p>
+        <p className="text-sm text-gray-500 mb-6">
+          Sign in to use the PM0.1 Dashboard system.
+        </p>
 
         <form className="flex flex-col gap-4 mb-4" onSubmit={handleSubmit}>
           <label className="flex flex-col gap-1.5 text-sm font-semibold text-gray-700">
@@ -62,31 +59,27 @@ function Login() {
             />
           </label>
 
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-                className="rounded text-emerald-500 focus:ring-emerald-400"
-              />
-              <span>Remember me</span>
-            </label>
-
-            <Link to="/forgot-password" className="text-xs text-emerald-500 hover:underline">
-              Forgot Password?
-            </Link>
-          </div>
-
-          <button 
+          {/* ปุ่ม Login */}
+          <button
             className="w-full py-2.5 rounded-full bg-emerald-500 text-white text-sm font-semibold shadow-lg hover:bg-emerald-600 hover:-translate-y-px transition disabled:opacity-70 disabled:cursor-default"
-            type="submit" 
+            type="submit"
             disabled={loading}
           >
             {loading ? 'Logging In...' : 'Log In'}
           </button>
         </form>
 
+        {/* ลิงก์ Forgot Password? อยู่ล่างปุ่ม Login ตามที่ต้องการ */}
+        <div className="mt-2 mb-4 text-center">
+          <Link
+            to="/forgot-password"
+            className="text-xs text-emerald-500 hover:underline"
+          >
+            Forgot Password?
+          </Link>
+        </div>
+
+        {/* ลิงก์สมัครสมาชิก */}
         <div className="flex justify-center gap-1.5 text-xs text-gray-600">
           <span>Don&apos;t have an account?</span>
           <Link to="/register" className="text-emerald-500 font-semibold hover:underline">
