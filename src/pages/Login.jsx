@@ -14,13 +14,10 @@ function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      // เรียก API login
       const data = await loginUser({ email, password });
 
-      // ดึงข้อมูลโปรไฟล์จาก response
       const profile = data.profile || data.user || {};
 
-      // เตรียมข้อมูลที่จะเก็บใน storage
       const userData = {
         firstName: profile.firstName || '',
         lastName: profile.lastName || '',
@@ -28,18 +25,16 @@ function Login() {
         role: profile.role || 'User',
       };
 
-      // ✅ เก็บข้อมูลผู้ใช้ไว้ให้ Navbar / Sidebar ใช้
-      // จะเก็บใน localStorage เสมอ (ถ้าอยากแยกแบบ remember ค่อยเพิ่มทีหลังได้)
       localStorage.setItem('user', JSON.stringify(userData));
 
       console.log(`Login Successful: Hello ${userData.firstName}`);
 
-      // ✅ หลัง login เสร็จ กลับไปหน้า Dashboard (หน้าแรก)
+      // ถ้าล็อกอินสำเร็จ แสดงว่าผ่านเงื่อนไข "ยืนยันอีเมลแล้ว" จาก backend
       navigate('/');
     } catch (err) {
       console.error(err);
       const msg = err.response?.data?.message || 'Login Error';
-      alert(msg);
+      alert(msg); // ถ้ายังไม่ได้ยืนยันอีเมล backend จะส่งข้อความเตือนมาแสดงตรงนี้
     } finally {
       setLoading(false);
     }
