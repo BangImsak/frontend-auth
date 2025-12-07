@@ -27,6 +27,7 @@ function getAirQualityStatus(pc01) {
 }
 
 function calculateForecast(history) {
+    // still kept as a fallback but we prefer model outputs from Firebase
     if (!history || history.length < 2) { const val = history[history.length - 1] || 0; return [val, val, val, val]; }
     const n = history.length;
     let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
@@ -41,6 +42,27 @@ function calculateForecast(history) {
         Math.max(0, Math.round(current + safeSlope * 20))
     ];
 }
+
+// ---------------------- New helper: map preds array -> object (like Python) ----------------------
+function mapPredsToPc01(preds) {
+  // expects preds to be an array-like with at least 12 elements
+  if (!Array.isArray(preds) || preds.length < 12) {
+    return null;
+  }
+  const toNum = (i) => {
+    const v = parseFloat(preds[i]);
+    if (Number.isNaN(v)) return null;
+    return Number(Number(v.toFixed(2)));
+  };
+  return {
+    Pc0_1:   toNum(0),
+    Pc0_1_15min: toNum(2),
+    Pc0_1_30min: toNum(5),
+    Pc0_1_45min: toNum(8),
+    Pc0_1_60min: toNum(11),
+  };
+}
+// -----------------------------------------------------------------------------------------------
 
 // In-App Toast
 const AlertToast = ({ alert, onClose }) => { // 👈 รับ alert object เข้ามา
@@ -105,7 +127,7 @@ const ForecastCard = ({ timeLabel, value, statusData }) => {
 // ✅ MAIN DASHBOARD
 function Dashboard() {
   const [envData, setEnvData] = useState({ Pc0_1: 0, PM2_5: 0, PM10: 0, Temperature: 0, Humidity: 0, Wind_speed: 0 });
-  const [forecastValues, setForecastValues] = useState([0, 0, 0, 0]);
+  const [forecastValues, setForecastValues] = useState([0, 0, 0, 0]); // [ +15, +30, +45, +60 ]
   const [loading, setLoading] = useState(true);
   
   // ✅ เปลี่ยน State สำหรับ Alerts เป็น Queue
@@ -176,33 +198,97 @@ function Dashboard() {
         if (snapshot.exists()) {
             const historyPC01 = [];
             let latestReading = null;
-            snapshot.forEach((daySnapshot) => { daySnapshot.forEach((logEntry) => { const val = logEntry.val(); latestReading = val; if(val.Pc0_1 !== undefined) historyPC01.push(val.Pc0_1); }); });
+
+            // iterate over days -> entries
+            snapshot.forEach((daySnapshot) => {
+                daySnapshot.forEach((logEntry) => {
+                    const val = logEntry.val();
+
+                    // Try to detect preds array under several common keys
+                    const predsArray = val?.preds || val?.predictions || val?.pred_scaled || val?.preds_array || val?.predScaled || val?.pred_scaled_array;
+
+                    if (Array.isArray(predsArray)) {
+                        const mapped = mapPredsToPc01(predsArray);
+                        if (mapped && mapped.Pc0_1 !== null) {
+                            // merge mapped preds into latest reading so UI can use them directly
+                            latestReading = { ...val, ...mapped };
+                            historyPC01.push(mapped.Pc0_1);
+                        } else {
+                            latestReading = val;
+                            if (val.Pc0_1 !== undefined && val.Pc0_1 !== null) historyPC01.push(val.Pc0_1);
+                        }
+                    } else {
+                        latestReading = val;
+                        if (val.Pc0_1 !== undefined && val.Pc0_1 !== null) historyPC01.push(val.Pc0_1);
+                    }
+                });
+            });
 
             if (latestReading) {
-                setEnvData({ Pc0_1: latestReading.Pc0_1 || 0, PM2_5: latestReading.PM2_5 || 0, PM10: latestReading.PM10 || 0, Temperature: latestReading.Temperature || 0, Humidity: latestReading.Humidity || 0, Wind_speed: latestReading.Wind_speed || 0 });
-                const predictions = calculateForecast(historyPC01);
-                setForecastValues(predictions);
+                // === PREFERRED: Use model outputs from Firebase directly ===
+                // If fields exist (Pc0_1_15min etc.) use them, otherwise fallback to calculateForecast
+                const f_now  = (latestReading.Pc0_1 !== undefined && latestReading.Pc0_1 !== null) ? latestReading.Pc0_1 : (historyPC01.length ? historyPC01[historyPC01.length - 1] : 0);
 
-                const predictionTimes = ['Current', '+15 min', '+30 min', '+45 min', '+60 min'];
-                const allValues = [latestReading.Pc0_1 || 0, ...predictions];
+                // if server provided per-horizon fields, use them; else fallback to linear forecast
+                let f_15 = latestReading.Pc0_1_15min;
+                let f_30 = latestReading.Pc0_1_30min;
+                let f_45 = latestReading.Pc0_1_45min;
+                let f_60 = latestReading.Pc0_1_60min;
+
+                // If any of the horizon values are undefined, compute fallback using calculateForecast(history)
+                if ([f_15, f_30, f_45, f_60].some(v => v === undefined || v === null)) {
+                    const fallback = calculateForecast(historyPC01.length ? historyPC01 : [f_now]);
+                    // fallback: [ +15, +30, +45, +60 ]
+                    if (f_15 === undefined || f_15 === null) f_15 = fallback[0];
+                    if (f_30 === undefined || f_30 === null) f_30 = fallback[1];
+                    if (f_45 === undefined || f_45 === null) f_45 = fallback[2];
+                    if (f_60 === undefined || f_60 === null) f_60 = fallback[3];
+                }
+
+                // Ensure numeric and round
+                const roundSafe = (v) => {
+                  const n = Number(parseFloat(v) || 0);
+                  return Math.round((n + Number.EPSILON) * 100) / 100;
+                };
+
+                const rf_now = roundSafe(f_now);
+                const rf_15 = roundSafe(f_15);
+                const rf_30 = roundSafe(f_30);
+                const rf_45 = roundSafe(f_45);
+                const rf_60 = roundSafe(f_60);
+
+                // Update forecast cards (+15..+60)
+                setForecastValues([rf_15, rf_30, rf_45, rf_60]);
+
+                // Update main envData (show model now value if present)
+                setEnvData({
+                    Pc0_1: rf_now,
+                    PM2_5: latestReading.PM2_5 || 0,
+                    PM10: latestReading.PM10 || 0,
+                    Temperature: latestReading.Temperature || 0,
+                    Humidity: latestReading.Humidity || 0,
+                    Wind_speed: latestReading.Wind_speed || 0,
+                });
+
+                // === Alert System (use model outputs, including horizons) ===
+                const allValues = [rf_now, rf_15, rf_30, rf_45, rf_60];
+                const predictionTimes = ["Now", "+15 min", "+30 min", "+45 min", "+60 min"];
+
                 const newAlerts = [];
                 const ALERT_THRESHOLD = 10000;
 
-                allValues.forEach((val, index) => {
-                    if (val > ALERT_THRESHOLD) {
-                        const statusData = getAirQualityStatus(val);
+                allValues.forEach((v, index) => {
+                    if (v > ALERT_THRESHOLD) {
+                        const statusData = getAirQualityStatus(v);
                         newAlerts.push({
                             time: predictionTimes[index],
-                            value: val,
-                            statusData: { ...statusData, value: val, time: predictionTimes[index] }
+                            value: v,
+                            statusData: { ...statusData, value: v, time: predictionTimes[index] }
                         });
                     }
                 });
 
-                // อัปเดต Alerts: หากมี Alert ใหม่ ให้แทนที่คิวเดิมเพื่อรับข้อมูลที่อัปเดต
                 if (newAlerts.length > 0 && isLoggedIn) {
-                    // หาก Alert ตัวแรกของคิวใหม่ เป็นอันเดียวกับ Alert ตัวแรกของคิวเก่า (เพื่อป้องกันการแจ้งเตือนซ้ำซ้อนใน Browser)
-                    // เราจะทำการ setAlerts ใหม่ทันที เพื่อให้ In-App Toast อัปเดตข้อมูล
                     setForecastAlerts(newAlerts);
                 } else if (newAlerts.length === 0) {
                     setForecastAlerts([]); // Clear alerts
@@ -232,7 +318,12 @@ function Dashboard() {
                     <div className="lg:col-span-9 h-full min-h-[400px] sm:min-h-[450px] lg:min-h-0"><MainCard pc01={envData.Pc0_1} temp={envData.Temperature} humidity={envData.Humidity} wind={envData.Wind_speed} statusData={currentStatusData} /></div>
                     <div className="lg:col-span-3 flex flex-row lg:flex-col gap-3 sm:gap-4 h-auto lg:h-full"><div className="flex-1 min-h-[180px] sm:min-h-[200px] lg:min-h-0"><PMCard title="PM 2.5" value={envData.PM2_5} unit="µg/m³" statusData={currentStatusData} /></div><div className="flex-1 min-h-[180px] sm:min-h-[200px] lg:min-h-0"><PMCard title="PM 10" value={envData.PM10} unit="µg/m³" statusData={currentStatusData} /></div></div>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 md:gap-4 h-[100px] sm:h-[120px] md:h-[140px] shrink-0"><ForecastCard timeLabel="+15 min" value={forecastValues[0]} statusData={currentStatusData} /><ForecastCard timeLabel="+30 min" value={forecastValues[1]} statusData={currentStatusData} /><ForecastCard timeLabel="+45 min" value={forecastValues[2]} statusData={currentStatusData} /><ForecastCard timeLabel="+60 min" value={forecastValues[3]} statusData={currentStatusData} /></div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 md:gap-4 h-[100px] sm:h-[120px] md:h-[140px] shrink-0">
+                  <ForecastCard timeLabel="+15 min" value={forecastValues[0]} statusData={currentStatusData} />
+                  <ForecastCard timeLabel="+30 min" value={forecastValues[1]} statusData={currentStatusData} />
+                  <ForecastCard timeLabel="+45 min" value={forecastValues[2]} statusData={currentStatusData} />
+                  <ForecastCard timeLabel="+60 min" value={forecastValues[3]} statusData={currentStatusData} />
+                </div>
             </div>
         )}
       </div>
