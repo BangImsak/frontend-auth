@@ -1,10 +1,11 @@
-// src/components/Sidebar.jsx
+// src/components/Sidebar.jsx (UPDATED)
 import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { X, User, LayoutDashboard, LogOut, LogIn } from "lucide-react";
+import { X, User, LayoutDashboard, LogOut, LogIn, FileText } from "lucide-react"; // <-- นำเข้า FileText
 
 const sidebarItems = [
-  { name: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+  { name: "Dashboard", icon: LayoutDashboard, path: "/" }, // <-- เปลี่ยน path เป็น /
+  // รายการ Data Export จะถูกเพิ่มตามเงื่อนไขด้านล่าง
 ];
 
 function Sidebar({
@@ -21,8 +22,6 @@ function Sidebar({
 
   // State สำหรับ User Profile
   const [profile, setProfile] = useState(null);
-  
-  // ✅ State สำหรับ Modal Logout (เอากลับมาแล้วครับ)
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
@@ -44,16 +43,13 @@ function Sidebar({
     }
   }, []);
 
-  // ✅ ฟังก์ชันเปิด Modal
   const handleLogoutClick = () => {
     setShowLogoutModal(true);
-    // ปิด Sidebar บนมือถือด้วย (ถ้าเปิดอยู่) เพื่อให้เห็น Modal ชัดๆ
     if (window.innerWidth < 768) {
        onClose(); 
     }
   };
 
-  // ✅ ฟังก์ชันยืนยัน Logout จริงๆ
   const confirmLogout = () => {
     localStorage.clear();
     sessionStorage.clear();
@@ -61,10 +57,20 @@ function Sidebar({
     navigate("/login");
   };
 
-  // ✅ ฟังก์ชันปิด Modal
   const closeModal = () => {
     setShowLogoutModal(false);
   };
+  
+  // ------------------- กำหนดรายการเมนู -------------------
+  const menuItems = [
+    { name: "Dashboard", icon: LayoutDashboard, path: "/" },
+  ];
+  
+  // เพิ่มรายการ "Data Export" ถ้าผู้ใช้ Login แล้ว
+  if (profile) {
+      menuItems.push({ name: "Data Export", icon: FileText, path: "/data-export" });
+  }
+  // --------------------------------------------------------
 
   return (
     <>
@@ -111,8 +117,8 @@ function Sidebar({
 
         {/* === Nav Items === */}
         <nav className="flex-1 flex flex-col p-3 pt-4 gap-1">
-          {sidebarItems.map((item) => {
-            const isActive = location.pathname === item.path || (item.path === '/dashboard' && location.pathname === '/');
+          {menuItems.map((item) => { // <-- ใช้ menuItems ที่รวม Data Export แล้ว
+            const isActive = location.pathname === item.path || (item.path === '/' && location.pathname === '/dashboard');
             const Icon = item.icon;
             return (
               <Link
@@ -136,7 +142,7 @@ function Sidebar({
           <div className="mt-1">
             {profile ? (
                 <button
-                    onClick={handleLogoutClick} // เรียกใช้ฟังก์ชันเปิด Modal แทน window.confirm
+                    onClick={handleLogoutClick}
                     className="flex w-full items-center gap-3 p-3 rounded-xl text-sm font-medium text-white/80 hover:bg-red-500/20 hover:text-red-100 transition-all text-left"
                 >
                     <LogOut size={20} />
@@ -155,19 +161,16 @@ function Sidebar({
         </nav>
       </aside>
 
-      {/* ✅ Logout Confirmation Modal (เอาโค้ดเดิมกลับมาใส่ตรงนี้) */}
+      {/* Logout Confirmation Modal */}
       {profile && showLogoutModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4">
-          {/* ฉากหลังดำจาง + เบลอ */}
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
             onClick={closeModal}
           ></div>
 
-          {/* กล่อง Popup */}
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 relative z-10 transform transition-all scale-100 animate-[fadeIn_0.2s_ease-out] border border-gray-100">
             <div className="flex flex-col items-center text-center">
-              {/* ไอคอน Logout */}
               <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mb-4">
                 <LogOut className="w-7 h-7 text-red-600 ml-1" />
               </div>
