@@ -1,16 +1,15 @@
-// src/pages/DataDownload.jsx (FINAL FINAL FINAL FINAL UPDATE: Navigate to Detail)
+// src/pages/DataDownload.jsx (FINAL FINAL FINAL FINAL UPDATE: Download Filtered Data)
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // <-- ต้องนำเข้านำทาง
+import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import { database } from '../firebase'; 
 import { ref, get, child } from 'firebase/database';
-import { Download, List, Loader2, FileText, Search } from 'lucide-react';
+import { Download, List, Loader2, FileText, Search, Calendar } from 'lucide-react';
 
-// ------------------- Headers สำหรับตารางย่อย (ถูกย้ายไป DateDetailView แล้ว) -------------------
+// ------------------- Headers สำหรับตารางย่อย -------------------
 const DETAIL_TABLE_HEADERS = [
-    // กำหนดไว้เพื่อใช้ในฟังก์ชัน downloadCSV เท่านั้น
     { key: 'timestamp', label: 'Time' },
     { key: 'PM2_5', label: 'PM2.5' },
     { key: 'PM10', label: 'PM10' },
@@ -24,24 +23,22 @@ const DETAIL_TABLE_HEADERS = [
 ];
 
 // --------------------------------------------------------
-// คอมโพเนนต์ย่อยสำหรับแสดงและดาวน์โหลดข้อมูลของแต่ละวัน
+// คอมโพเนนต์ย่อย: DateRow (ไม่มีการเปลี่ยนแปลงใน Logic ดาวน์โหลดรายวัน)
 // --------------------------------------------------------
 const DateRow = ({ date, currentStatusData }) => {
-    const navigate = useNavigate(); // <-- ใช้ useNavigate
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     
-    // ฟังก์ชันใหม่: ไปยังหน้า Detail
     const handleRowClick = () => {
         navigate(`/data-export/${date}`);
     };
 
-    // ------------------- การสร้างและดาวน์โหลด CSV -------------------
+    // ------------------- การสร้างและดาวน์โหลด CSV รายวัน -------------------
     const downloadCSV = async (e) => {
-        e.stopPropagation(); // หยุดไม่ให้ Row ถูกคลิกและเปลี่ยนหน้าเมื่อกดดาวน์โหลด
+        e.stopPropagation();
         setLoading(true);
         
         try {
-            // ดึงข้อมูลสำหรับ CSV
             const dataRef = child(ref(database), `env_logs/${date}`);
             const snapshot = await get(dataRef);
 
@@ -57,7 +54,7 @@ const DateRow = ({ date, currentStatusData }) => {
 
                 // Header สำหรับ CSV
                 const headers = DETAIL_TABLE_HEADERS.map(h => h.key); 
-                const csvHeaders = headers.join(',');
+                const csvHeaders = headers.map(h => DETAIL_TABLE_HEADERS.find(d => d.key === h).label).join(','); // ใช้ Label เป็น Header
 
                 // สร้างแถวข้อมูล
                 const csvRows = dataArray.map(row => 
@@ -73,7 +70,6 @@ const DateRow = ({ date, currentStatusData }) => {
 
                 const csvContent = [csvHeaders, ...csvRows].join('\n');
 
-                // Trigger การดาวน์โหลด
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
@@ -101,13 +97,11 @@ const DateRow = ({ date, currentStatusData }) => {
 
     return (
         <tr 
-            onClick={handleRowClick} // <-- คลิกที่แถวเปลี่ยนหน้า
+            onClick={handleRowClick}
             className={`cursor-pointer transition-colors hover:bg-gray-50`}
         >
-            {/* คอลัมน์วันที่หลัก */}
             <td className="px-4 py-3 text-sm font-semibold text-gray-900">{date}</td>
             
-            {/* คอลัมน์ปุ่มดาวน์โหลด */}
             <td className="px-4 py-3 text-right">
                 <button
                     onClick={downloadCSV}
@@ -130,7 +124,10 @@ function DataDownload() {
     const [availableDates, setAvailableDates] = useState([]); 
     const [loadingDates, setLoadingDates] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [startDate, setStartDate] = useState(''); 
+    const [endDate, setEndDate] = useState('');     
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [loadingAll, setLoadingAll] = useState(false); 
 
     const currentStatusData = { bgImage: 'none', bgClass: 'bg-emerald-500', textClass: 'text-emerald-500' };
 
@@ -158,10 +155,107 @@ function DataDownload() {
         fetchAvailableDates();
     }, []);
 
-    // ------------------- Logic สำหรับ Search วันที่ -------------------
-    const filteredDates = availableDates.filter(date => 
-        date.includes(searchTerm) 
-    );
+    // ------------------- Logic สำหรับ Search และ Filter วันที่ -------------------
+    const filteredDates = availableDates.filter(date => {
+        // 1. กรองด้วย Search Term (ชื่อวันที่)
+        const matchesSearch = date.includes(searchTerm);
+        
+        // 2. กรองด้วย Date Range
+        let matchesDateRange = true;
+        
+        if (startDate && date < startDate) {
+            matchesDateRange = false;
+        }
+
+        if (endDate && date > endDate) {
+            matchesDateRange = false;
+        }
+
+        return matchesSearch && matchesDateRange;
+    });
+    
+    // ------------------- ฟังก์ชันปรับปรุง: ดาวน์โหลดข้อมูลเฉพาะที่ถูกกรอง -------------------
+    const downloadFilteredDataCSV = async () => {
+        setLoadingAll(true);
+        let allCSVRows = [];
+        const datesToDownload = filteredDates; // ใช้เฉพาะวันที่ที่ถูกกรองแล้ว
+
+        if (datesToDownload.length === 0) {
+            alert('No data records match the current filter criteria to download.');
+            setLoadingAll(false);
+            return;
+        }
+
+        try {
+            const headers = [{ key: 'date', label: 'Date' }, ...DETAIL_TABLE_HEADERS]; 
+            const csvHeaders = headers.map(h => h.label).join(',');
+
+            // วนลูปผ่านวันที่ที่ถูกกรองเท่านั้น
+            for (const date of datesToDownload) {
+                const dataRef = child(ref(database), `env_logs/${date}`);
+                const snapshot = await get(dataRef);
+
+                if (snapshot.exists()) {
+                    const dailyData = snapshot.val();
+                    const dataArray = Object.keys(dailyData).map(key => dailyData[key]);
+                    
+                    const dailyCSVRows = dataArray.map(row => {
+                        const rowData = [date]; // เพิ่มคอลัมน์ 'date'
+                        
+                        // เพิ่มข้อมูลคอลัมน์อื่นๆ
+                        headers.slice(1).forEach(header => {
+                            const value = row[header.key];
+                            let processedValue = value === null || value === undefined ? '' : String(value);
+                            if (processedValue.includes(',') || processedValue.includes('"') || processedValue.includes('\n')) {
+                                processedValue = `"${processedValue.replace(/"/g, '""')}"`;
+                            }
+                            rowData.push(processedValue);
+                        });
+                        return rowData.join(',');
+                    });
+                    
+                    allCSVRows = allCSVRows.concat(dailyCSVRows);
+                }
+            }
+
+
+            if (allCSVRows.length === 0) {
+                alert(`No detailed records found for the ${datesToDownload.length} selected days.`);
+                setLoadingAll(false);
+                return;
+            }
+
+            // รวม Header และข้อมูลทั้งหมด
+            const csvContent = [csvHeaders, ...allCSVRows].join('\n');
+
+            // Trigger การดาวน์โหลด
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            
+            link.setAttribute('href', url);
+            // ตั้งชื่อไฟล์ตามช่วงวันที่ที่ถูกกรอง
+            const fileName = (startDate || endDate) 
+                ? `env_data_filtered_${startDate || 'start'}_to_${endDate || 'end'}.csv`
+                : `env_data_all_records.csv`;
+
+            link.setAttribute('download', fileName);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            alert(`Downloaded ${fileName} containing data from ${datesToDownload.length} filtered days successfully!`);
+
+        } catch (error) {
+            console.error("Failed to download filtered data:", error);
+            alert('Failed to download data due to an error.');
+        } finally {
+            setLoadingAll(false);
+        }
+    };
+
 
     // ------------------- UI Render -------------------
     return (
@@ -176,10 +270,29 @@ function DataDownload() {
 
                 <div className="bg-white rounded-xl shadow-lg p-6 w-full"> 
                     
-                    {/* ส่วน Search วันที่ */}
-                    <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-3">
-                        <p className="text-lg font-semibold text-gray-700 flex-shrink-0">Available Dates ({availableDates.length})</p>
-                        <div className="relative w-full sm:w-64">
+                    {/* ส่วน Search, Date Range Filter, และ Download All */}
+                    <div className="flex flex-col gap-4 mb-6">
+                        
+                        {/* Title & Download Filtered Button */}
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                            <p className="text-lg font-semibold text-gray-700 flex-shrink-0">
+                                Available Dates ({availableDates.length}) / Filtered ({filteredDates.length})
+                            </p>
+                            
+                            {/* **ปุ่มดาวน์โหลดข้อมูลที่ถูกกรองแล้ว** */}
+                            <button
+                                onClick={downloadFilteredDataCSV}
+                                disabled={loadingAll || filteredDates.length === 0}
+                                className={`px-4 py-2 rounded-lg text-white font-bold shadow-md transition disabled:opacity-50 flex items-center justify-center gap-2 ${currentStatusData.bgClass}`}
+                                style={{ backgroundColor: currentStatusData.bgClass.replace('bg-[', '').replace(']', '') }}
+                            >
+                                {loadingAll ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                                {loadingAll ? 'Preparing Data...' : `Download ${filteredDates.length} Days CSV`}
+                            </button>
+                        </div>
+                        
+                        {/* Search Input */}
+                        <div className="relative w-full sm:w-80">
                             <input
                                 type="text"
                                 placeholder="Search Date (YYYY-MM-DD)..."
@@ -188,6 +301,34 @@ function DataDownload() {
                                 className="pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm w-full focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition"
                             />
                             <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                        </div>
+
+                        {/* Date Range Filter */}
+                        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                            <div className="text-sm font-medium text-gray-600 flex items-center gap-2 flex-shrink-0">
+                                <Calendar size={18} className="text-emerald-500" />
+                                Filter Date Range:
+                            </div>
+                            
+                            {/* Start Date Input */}
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition w-full sm:w-auto"
+                                title="Start Date (YYYY-MM-DD)"
+                            />
+
+                            <span className="text-gray-500 font-semibold flex-shrink-0">to</span>
+
+                            {/* End Date Input */}
+                            <input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition w-full sm:w-auto"
+                                title="End Date (YYYY-MM-DD)"
+                            />
                         </div>
                     </div>
 
@@ -217,7 +358,7 @@ function DataDownload() {
                                     ) : (
                                         <tr>
                                             <td colSpan="2" className="text-center text-gray-500 py-6 text-sm">
-                                                {searchTerm ? `No dates found matching "${searchTerm}".` : 'No data records found in Firebase.'}
+                                                {(searchTerm || startDate || endDate) ? 'No dates match the search or date range criteria.' : 'No data records found in Firebase.'}
                                             </td>
                                         </tr>
                                     )}
