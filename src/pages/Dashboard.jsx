@@ -440,6 +440,13 @@ function Dashboard() {
 
   const isLoggedIn = !!currentUser;
 
+  const handleUserInteraction = () => {
+    if (!isLoggedIn) return;
+    if (Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  };
+
   // 🔊 Sound and Notification Logic
   useEffect(() => {
     let blinkInterval;
@@ -453,6 +460,16 @@ function Dashboard() {
       }
       let isWarning = true;
       blinkInterval = setInterval(() => { document.title = isWarning ? `⚠️⚠️ DANGER! (${time}) ⚠️⚠️` : "PM Dashboard"; isWarning = !isWarning; }, 1000);
+
+      // ✅ เติมส่วนนี้เพื่อแสดง Windows Desktop Notification
+      if (Notification.permission === 'granted') {
+         new Notification(`⚠️ ${status}! (${time})`, {
+             body: `Level: ${value.toLocaleString()} pc/cm³.`,
+             icon: face,
+             requireInteraction: true 
+         });
+      }
+
     } else {
       document.title = "PM Dashboard";
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
@@ -516,7 +533,7 @@ function Dashboard() {
   }, [isLoggedIn]);
 
   return (
-    <div className="flex min-h-screen relative overflow-hidden" style={{ backgroundImage: `url(${currentStatusData.bgImage})`, backgroundSize: 'cover', backgroundPosition: 'bottom', backgroundRepeat: 'no-repeat' }}>
+    <div onClick={handleUserInteraction} className="flex min-h-screen relative overflow-hidden" style={{ backgroundImage: `url(${currentStatusData.bgImage})`, backgroundSize: 'cover', backgroundPosition: 'bottom', backgroundRepeat: 'no-repeat' }}>
       <Navbar currentStatus={currentStatusData} /> 
       <Sidebar currentStatus={currentStatusData} />
       
