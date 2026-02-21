@@ -442,7 +442,7 @@ function Dashboard() {
 
   const handleUserInteraction = () => {
     if (!isLoggedIn) return;
-    if (Notification.permission === 'default') {
+    if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
   };
@@ -462,7 +462,7 @@ function Dashboard() {
       blinkInterval = setInterval(() => { document.title = isWarning ? `⚠️⚠️ DANGER! (${time}) ⚠️⚠️` : "PM Dashboard"; isWarning = !isWarning; }, 1000);
 
       // ✅ เติมส่วนนี้เพื่อแสดง Windows Desktop Notification
-      if (Notification.permission === 'granted') {
+      if ('Notification' in window && Notification.permission === 'granted') {
          new Notification(`⚠️ ${status}! (${time})`, {
              body: `Level: ${value.toLocaleString()} pc/cm³.`,
              icon: face,
