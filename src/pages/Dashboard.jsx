@@ -442,9 +442,11 @@ function Dashboard() {
 
   const handleUserInteraction = () => {
     if (!isLoggedIn) return;
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+    try {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    } catch (e) {} // ข้ามไปเงียบๆ ถ้าอุปกรณ์ไม่รองรับ
   };
 
   // 🔊 Sound and Notification Logic
@@ -454,20 +456,27 @@ function Dashboard() {
     
     if (currentAlert && isLoggedIn) {
       const { status, value, face, time } = currentAlert.statusData;
+      
+      // ส่วนแจ้งเตือนด้วยเสียง
       if ('speechSynthesis' in window) {
         const msg = new SpeechSynthesisUtterance(`Warning! High air pollution detected for ${time}.`);
         window.speechSynthesis.cancel(); window.speechSynthesis.speak(msg);
       }
+      
       let isWarning = true;
       blinkInterval = setInterval(() => { document.title = isWarning ? `⚠️⚠️ DANGER! (${time}) ⚠️⚠️` : "PM Dashboard"; isWarning = !isWarning; }, 1000);
 
-      // ✅ เติมส่วนนี้เพื่อแสดง Windows Desktop Notification
-      if ('Notification' in window && Notification.permission === 'granted') {
-         new Notification(`⚠️ ${status}! (${time})`, {
-             body: `Level: ${value.toLocaleString()} pc/cm³.`,
-             icon: face,
-             requireInteraction: true 
-         });
+      // ✅ ส่วนแจ้งเตือน Windows/Desktop (ครอบ try...catch ไว้ปกป้องมือถือ)
+      try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+           new Notification(`⚠️ ${status}! (${time})`, {
+               body: `Level: ${value.toLocaleString()} pc/cm³.`,
+               icon: face,
+               requireInteraction: true 
+           });
+        }
+      } catch (error) {
+         // ไม่ต้องทำอะไร ปล่อยให้มือถือรัน In-App Toast ต่อไป เว็บจะได้ไม่ขาว
       }
 
     } else {
